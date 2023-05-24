@@ -3,7 +3,7 @@ if (!($mysqli = new mysqli("127.0.0.1", "dbuser", "dbpassword"))) {
     die("Database Connection Error ! --> " . $mysqli->error);
 }
 if (!$mysqli->select_db("security")) {
-    die("Database Selection Error ! --> " . $mysqli->error);
+    print("Database Selection Error ! --> " . $mysqli->error);
 }
 //global settings
 $my_date = date("d/m/Y H:i");
