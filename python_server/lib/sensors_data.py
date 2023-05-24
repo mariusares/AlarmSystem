@@ -16,7 +16,9 @@ host = "localhost"
 user = "dbuser"
 passwd = "dbpassword"
 db = "security"
-alarm = 0
+
+system_alarm = 0
+silent = ""
 connection = MySQLdb.connect(host, user, passwd, db)
 cursor = connection.cursor()
 time_now = datetime.now().strftime('%d-%m-%Y %H:%M')
@@ -32,12 +34,14 @@ sensor_pin = []
 sensor_status = []
 alarm_temp = []
 email_data = []
-
+GPIO.setup(21, GPIO.OUT)
+GPIO.output(21, GPIO.LOW)
 def get_db_data():
     cursor.execute("SELECT email FROM users")
     records = cursor.fetchall()
     for row in records:
         email_address.append(row)
+
 def get_sensors():
     global sensor_name
     global sensor_type
@@ -54,19 +58,25 @@ def get_sensors():
         sensor_type.append(stype)
         spin = str(row[3])
         sensor_pin.append(spin)
+
 def alarm_reset():
     global trigger
-    global alarm
-    cursor.execute("SELECT status FROM status ORDER BY id DESC LIMIT 1;")
+    global system_alarm
+    global silent
+    cursor.execute("SELECT status, silent FROM status ORDER BY id DESC LIMIT 1;")
     records = cursor.fetchall()
     for row in records:
+        silent = row[1]
         print(row[0])
-        if row[0] != "Armed":
+        if row[0] == "Armed":
+           system_alarm = 1
            trigger = 0
+        elif row[0] == "Unset":
            alarm = 0
+           trigger = 0
+           GPIO.output(21, GPIO.LOW) #turn speaker off
         else:
-           trigger = 1
-           alarm = 1
+           pass
 
 def get_email_data():
     global email_data
@@ -83,6 +93,7 @@ def get_email_data():
 get_email_data()
 get_db_data()
 get_sensors()
+
 def send_email(receiver, message):
     email_body = message+ "\nPlease Check your alarm system\nThank you"
     msg = ("From: %s\r\nTo: %s\r\nSubject: %s\r\n"
@@ -103,10 +114,22 @@ def setup_gpios():
         if sensor_type[i] != "temp":
            #print(sensor_pin[i])
            GPIO.setup(int(sensor_pin[i]), GPIO.IN, pull_up_down = GPIO.PUD_UP)
+def speaker():
+    if silent == "yes":
+       GPIO.output(21, GPIO.LOW)
+    else:
+       GPIO.output(21, GPIO.HIGH)
+def trigger_status():
+    global trigger
+    if system_alarm > 0:
+       trigger = 1
+    else:
+       trigger = 0
 def check_gpios():
     global trigger
     global message
     global tempdata
+    global system_alarm
     if trigger < 1:
           sensor_status2 = []
           for i in range (0,len(sensor_name)):
@@ -114,7 +137,8 @@ def check_gpios():
                  alarm = sensor_type[i]+" "+sensor_name[i]+" -> Alarm"
                  sensor_status2.append(alarm)
                  update_data(sensor_status2)
-                 trigger = 1
+                 trigger_status()
+                 speaker()
                  for x in range (0, len(email_address)):
                      smail = email_address[x]
                      send_email(smail, alarm)
@@ -132,6 +156,8 @@ def check_gpios():
                   alarm = sensor_type[i]+" "+sensor_name[i]+" -> Alarm"
                   sensor_status2.append(alarm)
                   update_data(sensor_status2)
+                  trigger_status()
+                  speaker()
                   for x in range (0, len(email_address)):
                      smail = email_address[x]
                      send_email(smail, alarm)
@@ -141,6 +167,7 @@ def check_gpios():
                  sensor_status2.append(tempdata)
                  update_data(sensor_status2)
     else:
+          #print("trigger: " +str(trigger))
           pass
 def check_temperature():
     global alarm_temp
@@ -161,3 +188,4 @@ def alarm_run():
     threading.Timer(1, alarm_run).start()
 setup_gpios()
 alarm_run()
+alarm_reset()
