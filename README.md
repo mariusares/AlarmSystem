@@ -10,5 +10,8 @@ cd AlarmSystem
 
 chmod +x installer.sh
 
+Login: admin 
+Password: admin
+
 then you should be fine
 Thank you
